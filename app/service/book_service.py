@@ -2,35 +2,42 @@ from typing import Optional, List
 from uuid import UUID, uuid4
 
 from app.repository.book_repository import BookRepository
-from app.schemas.book import BookStatus, BookCreate
+from app.schemas.book import BookCreate, BookResponse
 
+from app.enums.book_status import BookStatus
+from app.models.book_data import Book
 
 class BookService:
-    def __init__(self):
-        self.repository = BookRepository()
+    def __init__(self, repository: BookRepository):
+        self.repository = repository
 
     async def get_books(self,
                         status: Optional[BookStatus] = None,
                         author: Optional[str] = None,
-                        sort_by: Optional[str] = None,) -> List[dict]:
+                        sort_by: Optional[str] = None,
+                        limit: int = 10,
+                        offset: int = 0) -> list[BookResponse]:
+        books = await self.repository.get_all(status, author, sort_by, limit, offset)
+        return [BookResponse.from_model(b) for b in books]
 
-        return await self.repository.get_all(status, author, sort_by)
+    async def get_book(self, book_id: UUID) -> BookResponse | None:
+        book = await self.repository.get_by_id(book_id)
+        if not book:
+            return None
+        return BookResponse.from_model(book)
 
-    async def get_book(self, book_id: UUID) -> dict:
-        return await self.repository.get_by_id(book_id)
+    async def create(self, data: BookCreate) -> BookResponse:
+        new_book = Book(
+            id=uuid4(),
+            title=data.title,
+            author=data.author,
+            description=data.description,
+            status=BookStatus.AVAILABLE,
+            year=data.year,
+        )
 
-    async def create(self, data: BookCreate) -> dict:
-        new_book = {
-            "id": uuid4(),
-            "title": data.title,
-            "author": data.author,
-            "description": data.description,
-            "status": BookStatus.AVAILABLE,
-            "year": data.year,
-        }
-
-        await self.repository.create(new_book)
-        return new_book
+        book = await self.repository.create(new_book)
+        return BookResponse.from_model(book)
 
     async def delete_book(self, book_id: UUID) -> None:
         await self.repository.delete_by_id(book_id)

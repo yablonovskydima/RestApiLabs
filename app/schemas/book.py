@@ -1,13 +1,9 @@
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
 from uuid import UUID
 from typing import Optional
 
-
-class BookStatus(str, Enum):
-    AVAILABLE = "available"
-    BORROWED = "borrowed"
-    RETIRED = "retired"
+from app.models.book_data import Book
+from app.enums.book_status import BookStatus
 
 
 @dataclass
@@ -44,8 +40,21 @@ class BookResponse:
         if not isinstance(self.id, UUID):
             raise ValueError("id must be a valid UUID")
 
-        if not isinstance(self.status, BookStatus):
+        if isinstance(self.status, str):
+            self.status = BookStatus(self.status)
+        elif not isinstance(self.status, BookStatus):
             raise ValueError("Invalid book status")
 
         if not isinstance(self.year, int) or self.year < 0:
             raise ValueError("Year must be non-negative")
+
+    @classmethod
+    def from_model(cls, book: Book) -> "BookResponse":
+        return cls(
+            id=book.id,
+            title=book.title,
+            author=book.author,
+            description=book.description,
+            status=book.status,
+            year=book.year,
+        )
