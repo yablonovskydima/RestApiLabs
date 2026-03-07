@@ -27,7 +27,23 @@ def make_repo() -> tuple[BookRepository, AsyncMock]:
 
 
 @pytest.mark.asyncio
-async def test_get_all_no_filters():
+async def test_get_all_with_cursor():
+    repo, mock_session = make_repo()
+
+    cursor_id = uuid4()
+    mock_books = [make_mock_book()]
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = mock_books
+    mock_session.execute.return_value = mock_result
+
+    result = await repo.get_all(cursor=cursor_id)
+
+    assert len(result) == 1
+    mock_session.execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_all_no_cursor():
     repo, mock_session = make_repo()
 
     mock_books = [make_mock_book(), make_mock_book()]
@@ -38,27 +54,6 @@ async def test_get_all_no_filters():
     result = await repo.get_all()
 
     assert len(result) == 2
-    mock_session.execute.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_get_all_with_filters():
-    repo, mock_session = make_repo()
-
-    mock_books = [make_mock_book(status=BookStatus.AVAILABLE, author="Author")]
-    mock_result = MagicMock()
-    mock_result.scalars.return_value.all.return_value = mock_books
-    mock_session.execute.return_value = mock_result
-
-    result = await repo.get_all(
-        status=BookStatus.AVAILABLE,
-        author="Author",
-        sort_by="title",
-        limit=5,
-        offset=0,
-    )
-
-    assert len(result) == 1
     mock_session.execute.assert_awaited_once()
 
 

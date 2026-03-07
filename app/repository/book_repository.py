@@ -18,7 +18,7 @@ class BookRepository:
         author: Optional[str] = None,
         sort_by: Optional[str] = None,
         limit: int = 10,
-        offset: int = 0) -> List[Book]:
+        cursor: Optional[UUID] = None) -> List[Book]:
 
         query = select(Book)
 
@@ -26,13 +26,16 @@ class BookRepository:
             query = query.where(Book.status == status)
         if author:
             query = query.where(Book.author.ilike(author))
+        if cursor:
+            query = query.where(Book.id > cursor)
         if sort_by == "title":
             query = query.order_by(Book.title)
         elif sort_by == "year":
             query = query.order_by(Book.year)
+        else:
+            query = query.order_by(Book.id)
 
-        query = query.limit(limit).offset(offset)
-
+        query = query.limit(limit)
         books = await self.session.execute(query)
         return list(books.scalars().all())
 

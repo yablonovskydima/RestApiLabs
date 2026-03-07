@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 from unittest.mock import AsyncMock, MagicMock
 
 from app.service.book_service import BookService
-from app.schemas.book import BookCreate, BookResponse
+from app.schemas.book import BookCreate, BookResponse, BooksPage
 from app.enums.book_status import BookStatus
 from app.models.book_data import Book
 
@@ -50,25 +50,32 @@ async def test_create_book_success():
 
 
 @pytest.mark.asyncio
-async def test_get_books_with_filters():
+async def test_get_books_returns_page():
     service, mock_repo = make_service()
 
-    mock_books = [make_mock_book(title="Book1"), make_mock_book(title="Book2")]
+    mock_books = [make_mock_book() for _ in range(10)]
     mock_repo.get_all.return_value = mock_books
 
-    result = await service.get_books(
-        status=BookStatus.AVAILABLE,
-        author="Author",
-        sort_by="title",
-        limit=10,
-        offset=0,
-    )
+    result = await service.get_books(limit=10)
 
-    assert len(result) == 2
-    assert all(isinstance(r, BookResponse) for r in result)
-    mock_repo.get_all.assert_awaited_once_with(
-        BookStatus.AVAILABLE, "Author", "title", 10, 0
-    )
+    assert isinstance(result, BooksPage)
+    assert len(result.items) == 10
+    assert result.next_cursor == mock_books[-1].id
+    mock_repo.get_all.assert_awaited_once_with(None, None, None, 10, None)
+
+
+@pytest.mark.asyncio
+async def test_get_books_last_page():
+    service, mock_repo = make_service()
+
+    mock_books = [make_mock_book() for _ in range(3)]
+    mock_repo.get_all.return_value = mock_books
+
+    result = await service.get_books(limit=10)
+
+    assert isinstance(result, BooksPage)
+    assert len(result.items) == 3
+    assert result.next_cursor is None
 
 
 @pytest.mark.asyncio

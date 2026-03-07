@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.repository.book_repository import BookRepository
-from app.schemas.book import BookStatus, BookResponse, BookCreate
+from app.schemas.book import BookStatus, BookResponse, BookCreate, BooksPage
 from app.service.book_service import BookService
 
 router = APIRouter(prefix="/books", tags=["Books"])
@@ -15,14 +15,14 @@ def get_book_service(session: AsyncSession = Depends(get_session)) -> BookServic
     repository = BookRepository(session)
     return BookService(repository)
 
-@router.get("/", response_model=List[BookResponse])
+@router.get("/", response_model=BooksPage)
 async def get_books(status_filter: Optional[BookStatus] = Query(None),
                     author: Optional[str] = Query(None),
                     sort_by: Optional[str] = Query(None, pattern="^(title|year)$"),
                     limit: int = Query(10, ge=1, le=100),
-                    offset: int = Query(0, ge=0),
+                    cursor: Optional[UUID] = Query(None),
                     service: BookService = Depends(get_book_service)):
-    return await service.get_books(status_filter, author, sort_by, limit, offset)
+    return await service.get_books(status_filter, author, sort_by, limit, cursor)
 
 @router.get("/{book_id}", response_model=BookResponse)
 async def get_book(book_id: UUID, service: BookService = Depends(get_book_service)):

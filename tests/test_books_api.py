@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 
 from app.api.books import router, get_book_service
-from app.schemas.book import BookStatus
+from app.schemas.book import BookStatus, BookResponse, BooksPage
 
 
 @pytest.fixture
@@ -33,22 +33,25 @@ async def client(app):
 
 @pytest.mark.asyncio
 async def test_get_books(client, mock_service):
-    mock_service.get_books = AsyncMock(return_value=[
-        {
-            "id": str(uuid4()),
-            "title": "Test Book",
-            "author": "Author",
-            "description": "Some description",
-            "status": BookStatus.AVAILABLE,
-            "year": 2024,
-        }
-    ])
+    book_id = uuid4()
+    mock_service.get_books = AsyncMock(return_value=BooksPage(
+        items=[BookResponse(
+            id=book_id,
+            title="Test Book",
+            author="Author",
+            description="Some description",
+            status=BookStatus.AVAILABLE,
+            year=2024,
+        )],
+        next_cursor=None,
+    ))
 
-    response = await client.get("/books/?limit=10&offset=0")
+    response = await client.get("/books/?limit=10")
 
     assert response.status_code == 200
-    assert len(response.json()) == 1
-    mock_service.get_books.assert_awaited_once_with(None, None, None, 10, 0)
+    assert len(response.json()["items"]) == 1
+    assert response.json()["next_cursor"] is None
+    mock_service.get_books.assert_awaited_once_with(None, None, None, 10, None)
 
 
 @pytest.mark.asyncio
