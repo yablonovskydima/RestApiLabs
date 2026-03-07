@@ -1,14 +1,8 @@
-from typing import Any, AsyncGenerator
-
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from app.core.config import settings
 
-engine = create_async_engine(settings.DATABASE_URL)
+client = AsyncIOMotorClient(settings.DATABASE_MONGO_URL)
+db = client[settings.MONGO_DB]
 
-AsyncSessionLocal = async_sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
-)
-
-async def get_session() -> AsyncGenerator[AsyncSession | Any, Any]:
-    async with AsyncSessionLocal() as session:
-        yield session
+def get_session() -> AsyncIOMotorCollection:
+    return db["books"]

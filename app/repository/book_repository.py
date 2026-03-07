@@ -1,16 +1,16 @@
-from typing import List, Dict, Optional
+from typing import List, Optional
 from uuid import UUID
+
+from motor.motor_asyncio import AsyncIOMotorCollection
 
 from app.enums.book_status import BookStatus
 from app.models.book_data import Book
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 class BookRepository:
 
-    def __init__(self, session: AsyncSession):
-        self.session = session
+    def __init__(self, collection: AsyncIOMotorCollection):
+        self.collection = collection
 
     async def get_all(
         self,
@@ -18,38 +18,41 @@ class BookRepository:
         author: Optional[str] = None,
         sort_by: Optional[str] = None,
         limit: int = 10,
-        offset: int = 0) -> List[Book]:
+        offset: int = 0
+    ) -> List[Book]:
 
-        query = select(Book)
+        filters = {}
 
         if status:
-            query = query.where(Book.status == status)
+            filters["status"] = status.value
         if author:
-            query = query.where(Book.author.ilike(author))
+            filters["author"] = {"$regex": author, "$options": "i"}
+
+        cursor = self.collection.find(filters)
+
         if sort_by == "title":
-            query = query.order_by(Book.title)
+            cursor = cursor.sort("title", 1)
         elif sort_by == "year":
-            query = query.order_by(Book.year)
+            cursor = cursor.sort("year", 1)
 
-        query = query.limit(limit).offset(offset)
+        cursor = cursor.skip(offset).limit(limit)
 
-        books = await self.session.execute(query)
-        return list(books.scalars().all())
+        books = []
+        async for document in cursor:
+            books.append(Book.from_mongo(document))
+
+        return books
 
     async def get_by_id(self, book_id: UUID) -> Book | None:
-        result = await self.session.execute(
-            select(Book).where(Book.id == book_id)
-        )
-        return result.scalar_one_or_none()
+        document = await self.collection.find_one({"_id": str(book_id)})
+        if document is None:
+            return None
+        return Book.from_mongo(document)
 
     async def create(self, book: Book) -> Book:
-        self.session.add(book)
-        await self.session.commit()
-        await self.session.refresh(book)
+        await self.collection.insert_one(book.to_mongo())
         return book
 
-    async def delete_by_id(self, book_id: UUID) -> None:
-        book = await self.get_by_id(book_id)
-        if book:
-            await self.session.delete(book)
-            await self.session.commit()
+    async def delete_by_id(self, book_id: UUID) -> bool:
+        response = await self.collection.delete_one({"_id": str(book_id)})
+        return response.deleted_count > 0
