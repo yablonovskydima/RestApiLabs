@@ -1,139 +1,146 @@
 import pytest
-from uuid import UUID, uuid4
-from unittest.mock import AsyncMock, MagicMock, patch
-
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.repository.book_repository import BookRepository
-from app.enums.book_status import BookStatus
+import uuid
+from unittest.mock import AsyncMock, MagicMock
 from app.models.book_data import Book
+from app.enums.book_status import BookStatus
+from app.repository.book_repository import BookRepository
 
 
-def make_mock_book(**kwargs) -> MagicMock:
-    book = MagicMock(spec=Book)
-    book.id = kwargs.get("id", uuid4())
-    book.title = kwargs.get("title", "Test Book")
-    book.author = kwargs.get("author", "Test Author")
-    book.description = kwargs.get("description", "Test Description")
-    book.status = kwargs.get("status", BookStatus.AVAILABLE)
-    book.year = kwargs.get("year", 2024)
-    return book
+def make_book(**kwargs) -> Book:
+    defaults = {
+        "title": "Dune",
+        "author": "Frank Herbert",
+        "year": 1965,
+        "status": BookStatus.AVAILABLE,
+        "description": None,
+    }
+    return Book(**{**defaults, **kwargs})
 
 
-def make_repo() -> tuple[BookRepository, AsyncMock]:
-    mock_session = AsyncMock(spec=AsyncSession)
-    repo = BookRepository(session=mock_session)
-    return repo, mock_session
+def make_mongo_doc(book: Book) -> dict:
+    return book.to_mongo()
 
 
-@pytest.mark.asyncio
-async def test_get_all_no_filters():
-    repo, mock_session = make_repo()
+@pytest.fixture
+def collection():
+    return MagicMock()
 
-    mock_books = [make_mock_book(), make_mock_book()]
-    mock_result = MagicMock()
-    mock_result.scalars.return_value.all.return_value = mock_books
-    mock_session.execute.return_value = mock_result
 
-    result = await repo.get_all()
-
-    assert len(result) == 2
-    mock_session.execute.assert_awaited_once()
+@pytest.fixture
+def repo(collection):
+    return BookRepository(collection)
 
 
 @pytest.mark.asyncio
-async def test_get_all_with_filters():
-    repo, mock_session = make_repo()
+async def test_create_returns_book(repo, collection):
+    book = make_book()
+    collection.insert_one = AsyncMock(return_value=MagicMock())
 
-    mock_books = [make_mock_book(status=BookStatus.AVAILABLE, author="Author")]
-    mock_result = MagicMock()
-    mock_result.scalars.return_value.all.return_value = mock_books
-    mock_session.execute.return_value = mock_result
+    result = await repo.create(book)
 
-    result = await repo.get_all(
-        status=BookStatus.AVAILABLE,
-        author="Author",
-        sort_by="title",
-        limit=5,
-        offset=0,
-    )
-
-    assert len(result) == 1
-    mock_session.execute.assert_awaited_once()
+    collection.insert_one.assert_called_once_with(book.to_mongo())
+    assert result == book
 
 
 @pytest.mark.asyncio
-async def test_get_by_id_found():
-    repo, mock_session = make_repo()
+async def test_get_by_id_returns_book(repo, collection):
+    book = make_book()
+    collection.find_one = AsyncMock(return_value=make_mongo_doc(book))
 
-    fake_id = UUID("11111111-1111-1111-1111-111111111111")
-    mock_book = make_mock_book(id=fake_id)
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = mock_book
-    mock_session.execute.return_value = mock_result
+    result = await repo.get_by_id(book.id)
 
-    result = await repo.get_by_id(fake_id)
-
-    assert result == mock_book
-    mock_session.execute.assert_awaited_once()
+    collection.find_one.assert_called_once_with({"_id": str(book.id)})
+    assert result.id == book.id
+    assert result.title == book.title
 
 
 @pytest.mark.asyncio
-async def test_get_by_id_not_found():
-    repo, mock_session = make_repo()
+async def test_get_by_id_returns_none(repo, collection):
+    collection.find_one = AsyncMock(return_value=None)
 
-    fake_id = UUID("11111111-1111-1111-1111-111111111111")
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = None
-    mock_session.execute.return_value = mock_result
-
-    result = await repo.get_by_id(fake_id)
+    result = await repo.get_by_id(uuid.uuid4())
 
     assert result is None
 
 
 @pytest.mark.asyncio
-async def test_create_book():
-    repo, mock_session = make_repo()
+async def test_delete_by_id_returns_true(repo, collection):
+    book = make_book()
+    collection.delete_one = AsyncMock(return_value=MagicMock(deleted_count=1))
 
-    mock_book = make_mock_book()
+    result = await repo.delete_by_id(book.id)
 
-    result = await repo.create(mock_book)
-
-    mock_session.add.assert_called_once_with(mock_book)
-    mock_session.commit.assert_awaited_once()
-    mock_session.refresh.assert_awaited_once_with(mock_book)
-    assert result == mock_book
+    collection.delete_one.assert_called_once_with({"_id": str(book.id)})
+    assert result is True
 
 
 @pytest.mark.asyncio
-async def test_delete_by_id_found():
-    repo, mock_session = make_repo()
+async def test_delete_by_id_returns_false_when_not_found(repo, collection):
+    collection.delete_one = AsyncMock(return_value=MagicMock(deleted_count=0))
 
-    fake_id = UUID("11111111-1111-1111-1111-111111111111")
-    mock_book = make_mock_book(id=fake_id)
+    result = await repo.delete_by_id(uuid.uuid4())
 
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = mock_book
-    mock_session.execute.return_value = mock_result
-
-    await repo.delete_by_id(fake_id)
-
-    mock_session.delete.assert_awaited_once_with(mock_book)
-    mock_session.commit.assert_awaited_once()
+    assert result is False
 
 
 @pytest.mark.asyncio
-async def test_delete_by_id_not_found():
-    repo, mock_session = make_repo()
+async def test_get_all_returns_books(repo, collection):
+    books = [make_book(title="Dune"), make_book(title="Foundation")]
+    docs = [make_mongo_doc(b) for b in books]
 
-    fake_id = UUID("11111111-1111-1111-1111-111111111111")
+    async def async_iter(_):
+        for doc in docs:
+            yield doc
 
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = None
-    mock_session.execute.return_value = mock_result
+    cursor = MagicMock()
+    cursor.sort.return_value = cursor
+    cursor.skip.return_value = cursor
+    cursor.limit.return_value = cursor
+    cursor.__aiter__ = async_iter
+    collection.find.return_value = cursor
 
-    await repo.delete_by_id(fake_id)
+    result = await repo.get_all()
 
-    mock_session.delete.assert_not_awaited()
-    mock_session.commit.assert_not_awaited()
+    assert len(result) == 2
+    assert result[0].title == "Dune"
+    assert result[1].title == "Foundation"
+
+
+@pytest.mark.asyncio
+async def test_get_all_with_status_filter(repo, collection):
+    book = make_book(status=BookStatus.AVAILABLE)
+    docs = [make_mongo_doc(book)]
+
+    async def async_iter(_):
+        for doc in docs:
+            yield doc
+
+    cursor = MagicMock()
+    cursor.sort.return_value = cursor
+    cursor.skip.return_value = cursor
+    cursor.limit.return_value = cursor
+    cursor.__aiter__ = async_iter
+    collection.find.return_value = cursor
+
+    result = await repo.get_all(status=BookStatus.AVAILABLE)
+
+    collection.find.assert_called_once_with({"status": BookStatus.AVAILABLE.value})
+    assert len(result) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_all_with_sort_by_title(repo, collection):
+    async def async_iter(_):
+        return
+        yield
+
+    cursor = MagicMock()
+    cursor.sort.return_value = cursor
+    cursor.skip.return_value = cursor
+    cursor.limit.return_value = cursor
+    cursor.__aiter__ = async_iter
+    collection.find.return_value = cursor
+
+    await repo.get_all(sort_by="title")
+
+    cursor.sort.assert_called_once_with("title", 1)
