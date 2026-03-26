@@ -18,9 +18,8 @@ class BookRepository:
         author: Optional[str] = None,
         sort_by: Optional[str] = None,
         limit: int = 10,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[Book]:
-
         filters = {}
 
         if status:
@@ -34,6 +33,8 @@ class BookRepository:
             cursor = cursor.sort("title", 1)
         elif sort_by == "year":
             cursor = cursor.sort("year", 1)
+        else:
+            cursor = cursor.sort("_id", 1)
 
         cursor = cursor.skip(offset).limit(limit)
 
