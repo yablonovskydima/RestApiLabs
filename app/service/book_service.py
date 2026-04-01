@@ -2,7 +2,7 @@ from typing import Optional, List
 from uuid import UUID, uuid4
 
 from app.repository.book_repository import BookRepository
-from app.schemas.book import BookCreate, BookResponse
+from app.schemas.book import BookCreate, BookResponse, BooksPage
 from app.enums.book_status import BookStatus
 from app.models.book_data import Book
 from app.exceptions.exceptions import BookNotFoundError, BookCreateError
@@ -19,9 +19,14 @@ class BookService:
         sort_by: Optional[str] = None,
         limit: int = 10,
         offset: int = 0,
-    ) -> list[BookResponse]:
-        books = await self.repository.get_all(status, author, sort_by, limit, offset)
-        return [BookResponse.from_model(b) for b in books]
+    ) -> BooksPage:
+        books, total = await self.repository.get_all(status, author, sort_by, limit, offset)
+        return BooksPage(
+            items=[BookResponse.from_model(b) for b in books],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
 
     async def get_book(self, book_id: UUID) -> BookResponse:
         book = await self.repository.get_by_id(book_id)

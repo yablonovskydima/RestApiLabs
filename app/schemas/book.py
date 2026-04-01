@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from uuid import UUID
-from typing import Optional
+from typing import Optional, List
 
 from app.models.book_data import Book
 from app.enums.book_status import BookStatus
@@ -58,3 +58,10 @@ class BookResponse:
             status=book.status,
             year=book.year,
         )
+
+@dataclass
+class BooksPage:
+    items: List[BookResponse]
+    total: int
+    limit: int
+    offset: int

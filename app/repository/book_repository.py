@@ -1,10 +1,10 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from uuid import UUID
 
 from app.enums.book_status import BookStatus
 from app.models.book_data import Book
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 class BookRepository:
@@ -18,14 +18,19 @@ class BookRepository:
         author: Optional[str] = None,
         sort_by: Optional[str] = None,
         limit: int = 10,
-        offset: int = 0) -> List[Book]:
+        offset: int = 0
+    ) -> tuple[list[Any], Any | None]:
 
-        query = select(Book)
-
+        filters = []
         if status:
-            query = query.where(Book.status == status)
+            filters.append(Book.status == status)
         if author:
-            query = query.where(Book.author.ilike(author))
+            filters.append(Book.author.ilike(author))
+
+        count_query = select(func.count()).select_from(Book).where(*filters)
+        total = await self.session.scalar(count_query)
+
+        query = select(Book).where(*filters)
         if sort_by == "title":
             query = query.order_by(Book.title)
         elif sort_by == "year":
@@ -34,7 +39,7 @@ class BookRepository:
         query = query.limit(limit).offset(offset)
 
         books = await self.session.execute(query)
-        return list(books.scalars().all())
+        return list(books.scalars().all()), total
 
     async def get_by_id(self, book_id: UUID) -> Book | None:
         result = await self.session.execute(
