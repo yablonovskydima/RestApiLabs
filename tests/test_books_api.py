@@ -6,21 +6,22 @@ from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
 
-from app.api.books import router, get_book_service
+from app.api.books import router
+from app.dependencies.dependencies import get_book_service
 from app.schemas.book import BookStatus, BookResponse, BooksPage
+from app.exceptions.exceptions import BookNotFoundError
 
 
 @pytest.fixture
 def mock_service():
-    service = AsyncMock()
-    return service
+    return AsyncMock()
 
 
 @pytest.fixture
 def app(mock_service):
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_book_service] = lambda: mock_service
+    app.dependency_overrides[get_book_service] = lambda: mock_service  # <-- мокаємо правильну функцію
     return app
 
 
@@ -31,54 +32,70 @@ async def client(app):
         yield ac
 
 
+def make_book_response(**kwargs) -> BookResponse:
+    defaults = {
+        "id": uuid4(),
+        "title": "Test Book",
+        "author": "Test Author",
+        "description": "Some description",
+        "status": BookStatus.AVAILABLE,
+        "year": 2024,
+    }
+    return BookResponse(**{**defaults, **kwargs})
+
+
 @pytest.mark.asyncio
-async def test_get_books(client, mock_service):
-    book_id = uuid4()
-    mock_service.get_books = AsyncMock(return_value=BooksPage(
-        items=[BookResponse(
-            id=book_id,
-            title="Test Book",
-            author="Author",
-            description="Some description",
-            status=BookStatus.AVAILABLE,
-            year=2024,
-        )],
-        next_cursor=None,
-    ))
+async def test_get_books_returns_page(client, mock_service):
+    book = make_book_response()
+    mock_service.get_books.return_value = BooksPage(items=[book], next_cursor=None)
 
     response = await client.get("/books/?limit=10")
 
     assert response.status_code == 200
-    assert len(response.json()["items"]) == 1
-    assert response.json()["next_cursor"] is None
+    data = response.json()
+    assert len(data["items"]) == 1
+    assert data["items"][0]["id"] == str(book.id)
+    assert data["next_cursor"] is None
     mock_service.get_books.assert_awaited_once_with(None, None, None, 10, None)
 
 
 @pytest.mark.asyncio
-async def test_get_book_success(client, mock_service):
-    book_id = uuid4()
+async def test_get_books_empty(client, mock_service):
+    mock_service.get_books.return_value = BooksPage(items=[], next_cursor=None)
 
-    mock_service.get_book = AsyncMock(return_value={
-        "id": str(book_id),
-        "title": "Test",
-        "author": "Author",
-        "description": "Some description",
-        "status": BookStatus.AVAILABLE,
-        "year": 2023
-    })
-
-    response = await client.get(f"/books/{book_id}")
+    response = await client.get("/books/")
 
     assert response.status_code == 200
-    assert response.json()["id"] == str(book_id)
-    mock_service.get_book.assert_awaited_once_with(book_id)
+    assert response.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_get_books_passes_filters(client, mock_service):
+    mock_service.get_books.return_value = BooksPage(items=[], next_cursor=None)
+
+    await client.get("/books/?status_filter=available&author=Shevchenko&sort_by=year&limit=5")
+
+    mock_service.get_books.assert_awaited_once_with(
+        BookStatus.AVAILABLE, "Shevchenko", "year", 5, None
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_book_success(client, mock_service):
+    book = make_book_response()
+    mock_service.get_book.return_value = book
+
+    response = await client.get(f"/books/{book.id}")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == str(book.id)
+    mock_service.get_book.assert_awaited_once_with(book.id)
 
 
 @pytest.mark.asyncio
 async def test_get_book_not_found(client, mock_service):
     book_id = uuid4()
-
-    mock_service.get_book = AsyncMock(return_value=None)
+    mock_service.get_book.side_effect = BookNotFoundError()
 
     response = await client.get(f"/books/{book_id}")
 
@@ -87,19 +104,18 @@ async def test_get_book_not_found(client, mock_service):
 
 
 @pytest.mark.asyncio
-async def test_create_book(client, mock_service):
-    book_data = {
+async def test_create_book_success(client, mock_service):
+    book = make_book_response(title="New Book", year=2025)
+    mock_service.create.return_value = book
+
+    payload = {
         "title": "New Book",
-        "author": "Author",
+        "author": "Test Author",
         "description": "Some description",
-        "status": BookStatus.AVAILABLE,
-        "year": 2025
+        "year": 2025,
     }
 
-    created_book = {"id": str(uuid4()), **book_data}
-    mock_service.create = AsyncMock(return_value=created_book)
-
-    response = await client.post("/books/", json=book_data)
+    response = await client.post("/books/", json=payload)
 
     assert response.status_code == 201
     assert response.json()["title"] == "New Book"
@@ -107,11 +123,18 @@ async def test_create_book(client, mock_service):
 
 
 @pytest.mark.asyncio
+async def test_create_book_invalid_payload(client, mock_service):
+    payload = {"title": "", "author": "AB", "description": "ok", "year": 2025}
+
+    response = await client.post("/books/", json=payload)
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_delete_book_success(client, mock_service):
     book_id = uuid4()
-
-    mock_service.get_book = AsyncMock(return_value={"id": str(book_id)})
-    mock_service.delete_book = AsyncMock(return_value=None)
+    mock_service.delete_book.return_value = None
 
     response = await client.delete(f"/books/{book_id}")
 
@@ -122,8 +145,7 @@ async def test_delete_book_success(client, mock_service):
 @pytest.mark.asyncio
 async def test_delete_book_not_found(client, mock_service):
     book_id = uuid4()
-
-    mock_service.get_book = AsyncMock(return_value=None)
+    mock_service.delete_book.side_effect = BookNotFoundError()
 
     response = await client.delete(f"/books/{book_id}")
 

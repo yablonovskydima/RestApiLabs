@@ -5,7 +5,7 @@ from fastapi import APIRouter, Query, status, HTTPException
 
 from app.schemas.book import BookStatus, BookResponse, BookCreate, BooksPage
 from app.dependencies.dependencies import BookServiceDep
-from app.exceptions import BookNotFoundError, BookCreateError
+from app.exceptions.exceptions import BookNotFoundError, BookCreateError
 
 router = APIRouter(prefix="/books", tags=["Books"])
 
