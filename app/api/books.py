@@ -3,14 +3,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status, HTTPException
 
-from app.schemas.book import BookStatus, BookResponse, BookCreate
+from app.schemas.book import BookStatus, BookResponse, BookCreate, BooksPage
 from app.dependencies.dependencies import BookServiceDep
 from app.exceptions.exceptions import BookNotFoundError, BookCreateError
 
 router = APIRouter(prefix="/books", tags=["Books"])
 
 
-@router.get("/", response_model=list[BookResponse])
+@router.get("/", response_model=BooksPage)
 async def get_books(
     service: BookServiceDep,
     status_filter: Optional[BookStatus] = Query(None),

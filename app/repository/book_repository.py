@@ -5,6 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 
 from app.enums.book_status import BookStatus
 from app.models.book_data import Book
+from app.schemas.book import BooksPage
 
 
 class BookRepository:
@@ -13,19 +14,21 @@ class BookRepository:
         self.collection = collection
 
     async def get_all(
-        self,
-        status: Optional[BookStatus] = None,
-        author: Optional[str] = None,
-        sort_by: Optional[str] = None,
-        limit: int = 10,
-        offset: int = 0,
-    ) -> List[Book]:
+            self,
+            status: Optional[BookStatus] = None,
+            author: Optional[str] = None,
+            sort_by: Optional[str] = None,
+            limit: int = 10,
+            offset: int = 0,
+    ) -> BooksPage:
         filters = {}
 
         if status:
             filters["status"] = status.value
         if author:
             filters["author"] = {"$regex": author, "$options": "i"}
+
+        total = await self.collection.count_documents(filters)
 
         cursor = self.collection.find(filters)
 
@@ -38,11 +41,16 @@ class BookRepository:
 
         cursor = cursor.skip(offset).limit(limit)
 
-        books = []
+        items = []
         async for document in cursor:
-            books.append(Book.from_mongo(document))
+            items.append(Book.from_mongo(document))
 
-        return books
+        return BooksPage(
+            items=items,
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
 
     async def get_by_id(self, book_id: UUID) -> Book | None:
         document = await self.collection.find_one({"_id": str(book_id)})

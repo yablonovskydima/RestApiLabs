@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 from unittest.mock import AsyncMock, MagicMock
 
 from app.service.book_service import BookService
-from app.schemas.book import BookCreate, BookResponse
+from app.schemas.book import BookCreate, BookResponse, BooksPage
 from app.enums.book_status import BookStatus
 from app.models.book_data import Book
 
@@ -54,7 +54,12 @@ async def test_get_books_with_filters():
     service, mock_repo = make_service()
 
     mock_books = [make_mock_book(title="Book1"), make_mock_book(title="Book2")]
-    mock_repo.get_all.return_value = mock_books
+    mock_repo.get_all.return_value = BooksPage(
+        items=mock_books,
+        total=2,
+        limit=10,
+        offset=0,
+    )
 
     result = await service.get_books(
         status=BookStatus.AVAILABLE,
@@ -64,8 +69,8 @@ async def test_get_books_with_filters():
         offset=0,
     )
 
-    assert len(result) == 2
-    assert all(isinstance(r, BookResponse) for r in result)
+    assert result.total == 2
+    assert len(result.items) == 2
     mock_repo.get_all.assert_awaited_once_with(
         BookStatus.AVAILABLE, "Author", "title", 10, 0
     )
@@ -88,14 +93,16 @@ async def test_get_book_by_id():
 
 @pytest.mark.asyncio
 async def test_get_book_not_found():
+    from app.exceptions.exceptions import BookNotFoundError
+
     service, mock_repo = make_service()
 
     fake_id = UUID("11111111-1111-1111-1111-111111111111")
     mock_repo.get_by_id.return_value = None
 
-    result = await service.get_book(fake_id)
+    with pytest.raises(BookNotFoundError):
+        await service.get_book(fake_id)
 
-    assert result is None
     mock_repo.get_by_id.assert_awaited_once_with(fake_id)
 
 

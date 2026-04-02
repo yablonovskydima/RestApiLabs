@@ -23,7 +23,9 @@ def make_mongo_doc(book: Book) -> dict:
 
 @pytest.fixture
 def collection():
-    return MagicMock()
+    col = MagicMock()
+    col.count_documents = AsyncMock(return_value=0)
+    return col
 
 
 @pytest.fixture
@@ -98,12 +100,14 @@ async def test_get_all_returns_books(repo, collection):
     cursor.limit.return_value = cursor
     cursor.__aiter__ = async_iter
     collection.find.return_value = cursor
+    collection.count_documents = AsyncMock(return_value=2)
 
     result = await repo.get_all()
 
-    assert len(result) == 2
-    assert result[0].title == "Dune"
-    assert result[1].title == "Foundation"
+    assert result.total == 2
+    assert len(result.items) == 2
+    assert result.items[0].title == "Dune"
+    assert result.items[1].title == "Foundation"
 
 
 @pytest.mark.asyncio
@@ -121,11 +125,13 @@ async def test_get_all_with_status_filter(repo, collection):
     cursor.limit.return_value = cursor
     cursor.__aiter__ = async_iter
     collection.find.return_value = cursor
+    collection.count_documents = AsyncMock(return_value=1)
 
     result = await repo.get_all(status=BookStatus.AVAILABLE)
 
     collection.find.assert_called_once_with({"status": BookStatus.AVAILABLE.value})
-    assert len(result) == 1
+    assert result.total == 1
+    assert len(result.items) == 1
 
 
 @pytest.mark.asyncio
@@ -140,6 +146,7 @@ async def test_get_all_with_sort_by_title(repo, collection):
     cursor.limit.return_value = cursor
     cursor.__aiter__ = async_iter
     collection.find.return_value = cursor
+    collection.count_documents = AsyncMock(return_value=0)
 
     await repo.get_all(sort_by="title")
 
