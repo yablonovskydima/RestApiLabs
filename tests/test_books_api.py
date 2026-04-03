@@ -101,8 +101,7 @@ async def test_create_book_success(mock_service):
         year=2025,
     )
 
-    result = await create_book(book=payload, service=mock_service)  # body -> book
-
+    result = await create_book(book=payload, service=mock_service)
     assert result.title == "New Book"
     mock_service.create.assert_awaited_once()
 

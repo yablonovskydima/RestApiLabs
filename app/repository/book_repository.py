@@ -18,7 +18,8 @@ class BookRepository:
         author: Optional[str] = None,
         sort_by: Optional[str] = None,
         limit: int = 10,
-        cursor: Optional[UUID] = None) -> List[Book]:
+        cursor: Optional[UUID] = None
+    ) -> List[Book]:
 
         query = select(Book)
 
