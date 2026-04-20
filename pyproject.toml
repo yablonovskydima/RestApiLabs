@@ -10,5 +10,6 @@ dependencies = [
     "flask-sqlalchemy>=3.1.1",
     "psycopg2-binary>=2.9.11",
     "pydantic-settings>=2.13.1",
+    "pytest>=9.0.3",
     "python-dotenv>=1.2.2",
 ]
