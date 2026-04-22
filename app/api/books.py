@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query, status, HTTPException
 
 from app.schemas.book import BookStatus, BookResponse, BookCreate, BooksPage
-from app.dependencies.dependencies import BookServiceDep
+from app.dependencies.dependencies import BookServiceDep, CurrentUser
 from app.exceptions.exceptions import BookNotFoundError, BookCreateError
 
 router = APIRouter(prefix="/books", tags=["Books"])
@@ -13,6 +13,7 @@ router = APIRouter(prefix="/books", tags=["Books"])
 @router.get("/", response_model=BooksPage)
 async def get_books(
     service: BookServiceDep,
+    _: CurrentUser,
     status_filter: Optional[BookStatus] = Query(None),
     author: Optional[str] = Query(None),
     sort_by: Optional[str] = Query(None, pattern="^(title|year)$"),
@@ -23,7 +24,7 @@ async def get_books(
 
 
 @router.get("/{book_id}", response_model=BookResponse)
-async def get_book(book_id: UUID, service: BookServiceDep):
+async def get_book(book_id: UUID, service: BookServiceDep, _: CurrentUser):
     try:
         return await service.get_book(book_id)
     except BookNotFoundError:
@@ -31,7 +32,7 @@ async def get_book(book_id: UUID, service: BookServiceDep):
 
 
 @router.post("/", response_model=BookResponse, status_code=status.HTTP_201_CREATED)
-async def create_book(book: BookCreate, service: BookServiceDep):
+async def create_book(book: BookCreate, service: BookServiceDep, _: CurrentUser):
     try:
         return await service.create(book)
     except BookCreateError as e:
@@ -39,7 +40,7 @@ async def create_book(book: BookCreate, service: BookServiceDep):
 
 
 @router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_book(book_id: UUID, service: BookServiceDep):
+async def delete_book(book_id: UUID, service: BookServiceDep, _: CurrentUser):
     try:
         await service.delete_book(book_id)
     except BookNotFoundError:

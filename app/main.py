@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.api.books import router as books_router
+from app.api.auth import router as auth_router
 from app.db.session import engine
 from app.models.book_data import Base
+import app.models.users
 
 
 @asynccontextmanager
@@ -22,4 +24,5 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.include_router(auth_router)
 app.include_router(books_router, tags=["Books"])
