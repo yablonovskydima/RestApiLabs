@@ -10,6 +10,11 @@ from app.api.books import get_books, get_book, create_book, delete_book
 from app.schemas.book import BookCreate  # adjust if needed
 
 
+from unittest.mock import MagicMock
+from app.models.users import User
+
+mock_user = MagicMock(spec=User)
+
 @pytest.fixture
 def mock_service():
     return AsyncMock()
@@ -35,6 +40,7 @@ async def test_get_books_returns_page(mock_service):
     result = await get_books(
         status_filter=None, author=None, sort_by=None, limit=10, cursor=None,
         service=mock_service,
+        _=mock_user
     )
 
     assert len(result.items) == 1
@@ -49,6 +55,7 @@ async def test_get_books_empty(mock_service):
     result = await get_books(
         status_filter=None, author=None, sort_by=None, limit=10, cursor=None,
         service=mock_service,
+        _=mock_user
     )
 
     assert result.items == []
@@ -61,6 +68,7 @@ async def test_get_books_passes_filters(mock_service):
     await get_books(
         status_filter=BookStatus.AVAILABLE, author="Shevchenko", sort_by="year", limit=5, cursor=None,
         service=mock_service,
+        _=mock_user
     )
 
     mock_service.get_books.assert_awaited_once_with(BookStatus.AVAILABLE, "Shevchenko", "year", 5, None)
@@ -71,7 +79,7 @@ async def test_get_book_success(mock_service):
     book = make_book_response()
     mock_service.get_book.return_value = book
 
-    result = await get_book(book_id=book.id, service=mock_service)
+    result = await get_book(book_id=book.id, service=mock_service, _=mock_user)
 
     assert result.id == book.id
     mock_service.get_book.assert_awaited_once_with(book.id)
@@ -82,7 +90,7 @@ async def test_get_book_not_found(mock_service):
     mock_service.get_book.side_effect = BookNotFoundError()
 
     try:
-        await get_book(book_id=uuid4(), service=mock_service)
+        await get_book(book_id=uuid4(), service=mock_service, _=mock_user)
         pytest.fail("Expected HTTPException was not raised")
     except HTTPException as e:
         assert e.status_code == 404
@@ -101,7 +109,7 @@ async def test_create_book_success(mock_service):
         year=2025,
     )
 
-    result = await create_book(book=payload, service=mock_service)
+    result = await create_book(book=payload, service=mock_service, _=mock_user)
     assert result.title == "New Book"
     mock_service.create.assert_awaited_once()
 
@@ -111,7 +119,7 @@ async def test_delete_book_success(mock_service):
     book_id = uuid4()
     mock_service.delete_book.return_value = None
 
-    await delete_book(book_id=book_id, service=mock_service)
+    await delete_book(book_id=book_id, service=mock_service, _=mock_user)
 
     mock_service.delete_book.assert_awaited_once_with(book_id)
 
@@ -121,7 +129,7 @@ async def test_delete_book_not_found(mock_service):
     mock_service.delete_book.side_effect = BookNotFoundError()
 
     try:
-        await delete_book(book_id=uuid4(), service=mock_service)
+        await delete_book(book_id=uuid4(), service=mock_service, _=mock_user)
         pytest.fail("Expected HTTPException was not raised")
     except HTTPException as e:
         assert e.status_code == 404

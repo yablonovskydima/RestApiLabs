@@ -11,6 +11,7 @@ from app.core.security import decode_token
 from app.db.session import get_session
 from app.models.users import User
 from app.repository.book_repository import BookRepository
+from app.repository.auth_repository import AuthRepository
 from app.service.auth_service import AuthService
 from app.service.book_service import BookService
 
@@ -24,7 +25,8 @@ BookServiceDep = Annotated[BookService, Depends(get_book_service)]
 
 
 def get_auth_service(session: AsyncSession = Depends(get_session)) -> AuthService:
-    return AuthService(session)
+    repository = AuthRepository(session)
+    return AuthService(repository)
 
 
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
