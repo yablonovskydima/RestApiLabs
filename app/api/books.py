@@ -34,7 +34,7 @@ def get_books():
       - name: status
         in: query
         type: string
-        enum: [AVAILABLE, BORROWED]
+        enum: [AVAILABLE, BORROWED, RETIRED]
         required: false
       - name: author
         in: query
@@ -54,7 +54,27 @@ def get_books():
         default: 0
     responses:
       200:
-        description: List of books
+        description: Paginated list of books
+        schema:
+          type: object
+          properties:
+            total:
+              type: integer
+              example: 42
+            limit:
+              type: integer
+              example: 10
+            offset:
+              type: integer
+              example: 0
+            items:
+              type: array
+              items:
+                $ref: '#/definitions/BookResponse'
+      404:
+        description: Invalid query parameters
+        schema:
+          $ref: '#/definitions/ErrorResponse'
     """
     service = get_service()
 
@@ -83,7 +103,7 @@ def get_books():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error": str(e)}), 404
 
 
 @book_bp.route("/<uuid:book_id>", methods=["GET"])
@@ -97,11 +117,16 @@ def get_book(book_id: UUID):
         type: string
         format: uuid
         required: true
+        example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
     responses:
       200:
         description: Book found
+        schema:
+          $ref: '#/definitions/BookResponse'
       404:
         description: Book not found
+        schema:
+          $ref: '#/definitions/ErrorResponse'
     """
     service = get_service()
 
@@ -123,28 +148,16 @@ def create_book():
         name: body
         required: true
         schema:
-          type: object
-          required:
-            - title
-            - author
-          properties:
-            title:
-              type: string
-              example: "The Great Gatsby"
-            author:
-              type: string
-              example: "F. Scott Fitzgerald"
-            description:
-              type: string
-              example: "A story about the American dream"
-            year:
-              type: integer
-              example: 1925
+          $ref: '#/definitions/BookCreate'
     responses:
       201:
-        description: Book created
+        description: Book created successfully
+        schema:
+          $ref: '#/definitions/BookResponse'
       400:
-        description: Validation error
+        description: Validation error or invalid input
+        schema:
+          $ref: '#/definitions/ErrorCreateResponse'
     """
     service = get_service()
 
@@ -173,11 +186,14 @@ def delete_book(book_id: UUID):
         type: string
         format: uuid
         required: true
+        example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
     responses:
       204:
-        description: Book deleted
+        description: Book deleted successfully
       404:
         description: Book not found
+        schema:
+          $ref: '#/definitions/ErrorResponse'
     """
     service = get_service()
 
@@ -187,3 +203,72 @@ def delete_book(book_id: UUID):
 
     except BookNotFoundError:
         return jsonify({"error": "Book not found"}), 404
+
+
+definitions = """
+definitions:
+  BookResponse:
+    type: object
+    properties:
+      id:
+        type: string
+        format: uuid
+        example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+      title:
+        type: string
+        example: "The Great Gatsby"
+      author:
+        type: string
+        example: "F. Scott Fitzgerald"
+      description:
+        type: string
+        nullable: true
+        example: "A story about the American dream"
+      status:
+        type: string
+        enum: [AVAILABLE, BORROWED, RETIRED]
+        example: "AVAILABLE"
+      year:
+        type: integer
+        example: 1925
+
+  BookCreate:
+    type: object
+    required:
+      - title
+      - author
+      - description
+      - year
+    properties:
+      title:
+        type: string
+        minLength: 1
+        example: "The Great Gatsby"
+      author:
+        type: string
+        minLength: 3
+        example: "F. Scott Fitzgerald"
+      description:
+        type: string
+        minLength: 5
+        example: "A story about the American dream"
+      year:
+        type: integer
+        minimum: 0
+        example: 1925
+
+  ErrorResponse:
+    type: object
+    properties:
+      error:
+        type: string
+        example: "Book not found"
+        
+ 
+  ErrorCreateResponse:
+    type: object
+    properties:
+      error:
+        type: string
+        example: "Could not create a book"
+"""

@@ -14,6 +14,41 @@ def create_app():
             "title": "Books API",
             "description": "API for managing books",
             "version": "1.0.0"
+        },
+        "definitions": {
+            "BookResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "format": "uuid", "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"},
+                    "title": {"type": "string", "example": "The Great Gatsby"},
+                    "author": {"type": "string", "example": "F. Scott Fitzgerald"},
+                    "description": {"type": "string", "nullable": True, "example": "A story about the American dream"},
+                    "status": {"type": "string", "enum": ["AVAILABLE", "BORROWED"], "example": "AVAILABLE"},
+                    "year": {"type": "integer", "example": 1925}
+                }
+            },
+            "BookCreate": {
+                "type": "object",
+                "required": ["title", "author", "description", "year"],
+                "properties": {
+                    "title": {"type": "string", "minLength": 1, "example": "The Great Gatsby"},
+                    "author": {"type": "string", "minLength": 3, "example": "F. Scott Fitzgerald"},
+                    "description": {"type": "string", "minLength": 5, "example": "A story about the American dream"},
+                    "year": {"type": "integer", "minimum": 0, "example": 1925}
+                }
+            },
+            "ErrorResponse": {
+                "type": "object",
+                "properties": {
+                    "error": {"type": "string", "example": "Book not found"}
+                }
+            },
+            "ErrorCreateResponse" : {
+                "type": "object",
+                "properties": {
+                    "error": {"type": "string", "example": "Could not create a book"}
+                }
+            }
         }
     })
 
