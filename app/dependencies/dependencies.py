@@ -1,11 +1,12 @@
 from typing import Annotated
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
+from app.core.rate_limiter import check_rate_limit
 
 from app.core.security import decode_token
 from app.db.session import get_session
@@ -67,3 +68,42 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+async def get_current_user_optional(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> User | None:
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    try:
+        payload = decode_token(auth.removeprefix("Bearer "))
+        if payload.get("type") != "access":
+            return None
+        user_id = payload.get("sub")
+        result = await session.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        return user if user and user.is_active else None
+    except JWTError:
+        return None
+
+OptionalUser = Annotated[User | None, Depends(get_current_user_optional)]
+
+
+def rate_limit(request: Request) -> None:
+    auth = request.headers.get("Authorization", "")
+
+    if auth.startswith("Bearer "):
+        token = auth.removeprefix("Bearer ")
+        try:
+            decode_token(token)
+            key = f"auth:{token[:32]}"
+            check_rate_limit(request, limit=10, key=key)
+            return
+        except JWTError:
+            pass
+
+    ip = request.client.host
+    check_rate_limit(request, limit=2, key=f"anon:{ip}")
+
+RateLimitDep = Annotated[None, Depends(rate_limit)]
