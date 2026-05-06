@@ -90,20 +90,20 @@ async def get_current_user_optional(
 OptionalUser = Annotated[User | None, Depends(get_current_user_optional)]
 
 
-def rate_limit(request: Request) -> None:
+async def rate_limit(request: Request) -> None:
     auth = request.headers.get("Authorization", "")
 
     if auth.startswith("Bearer "):
         token = auth.removeprefix("Bearer ")
         try:
             decode_token(token)
-            key = f"auth:{token[:32]}"
-            check_rate_limit(request, limit=10, key=key)
+            key = f"rl:auth:{token[:32]}"
+            await check_rate_limit(key, limit=10)
             return
         except JWTError:
             pass
 
     ip = request.client.host
-    check_rate_limit(request, limit=2, key=f"anon:{ip}")
+    await check_rate_limit(f"rl:anon:{ip}", limit=2)
 
 RateLimitDep = Annotated[None, Depends(rate_limit)]

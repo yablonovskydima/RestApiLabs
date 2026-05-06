@@ -13,8 +13,7 @@ router = APIRouter(prefix="/books", tags=["Books"])
 @router.get("/", response_model=BooksPage)
 async def get_books(
     service: BookServiceDep,
-    _: OptionalUser,
-    __: RateLimitDep,
+    _: RateLimitDep,
     status_filter: Optional[BookStatus] = Query(None),
     author: Optional[str] = Query(None),
     sort_by: Optional[str] = Query(None, pattern="^(title|year)$"),
@@ -25,7 +24,7 @@ async def get_books(
 
 
 @router.get("/{book_id}", response_model=BookResponse)
-async def get_book(book_id: UUID, service: BookServiceDep, _: OptionalUser, __: RateLimitDep):
+async def get_book(book_id: UUID, service: BookServiceDep, __: RateLimitDep):
     try:
         return await service.get_book(book_id)
     except BookNotFoundError:
