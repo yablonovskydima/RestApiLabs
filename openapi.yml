@@ -1,0 +1,405 @@
+openapi: 3.0.3
+info:
+  title: Library API
+  version: 1.0.0
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegister'
+            example:
+              email: user@example.com
+              username: john_doe
+              password: Secret123
+      responses:
+        '201':
+          description: Successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+              example:
+                access_token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.abc"
+                refresh_token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.xyz"
+                token_type: bearer
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              example:
+                detail: "Username can only contain letters, digits and underscores"
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              example:
+                detail: "User with this email already exists"
+
+  /auth/login:
+    post:
+      summary: Login
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLogin'
+            example:
+              email: user@example.com
+              password: Secret123
+      responses:
+        '200':
+          description: Successfully logged in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+              example:
+                access_token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.abc"
+                refresh_token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.xyz"
+                token_type: bearer
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              example:
+                detail: "Invalid email or password"
+
+  /auth/refresh:
+    post:
+      summary: Refresh access token
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+            example:
+              refresh_token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.xyz"
+      responses:
+        '200':
+          description: New access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessTokenResponse'
+              example:
+                access_token: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.new"
+                token_type: bearer
+        '401':
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              example:
+                detail: "Could not validate credentials"
+
+  /books/:
+    get:
+      summary: Get list of books
+      tags: [Books]
+      parameters:
+        - name: status_filter
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/BookStatus'
+        - name: author
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: sort_by
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: "^(title|year)$"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Paginated list of books
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BooksPage'
+              example:
+                items:
+                  - id: "123e4567-e89b-12d3-a456-426614174000"
+                    title: "Kobzar"
+                    author: "Taras Shevchenko"
+                    description: "Collection of poetry"
+                    status: available
+                    year: 1840
+                  - id: "223e4567-e89b-12d3-a456-426614174001"
+                    title: "Tigrolovy"
+                    author: "Ivan Bahrianyi"
+                    description: "Novel about escape from gulag"
+                    status: borrowed
+                    year: 1944
+                next_cursor: null
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              example:
+                detail: "Rate limit exceeded. Max 2 requests per minute."
+
+    post:
+      summary: Create a new book
+      tags: [Books]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookCreate'
+            example:
+              title: "Kobzar"
+              author: "Taras Shevchenko"
+              description: "Collection of poetry"
+              year: 1840
+      responses:
+        '201':
+          description: Book created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookResponse'
+              example:
+                id: "123e4567-e89b-12d3-a456-426614174000"
+                title: "Kobzar"
+                author: "Taras Shevchenko"
+                description: "Collection of poetry"
+                status: available
+                year: 1840
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              example:
+                detail: "Author must be at least 3 characters long"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              example:
+                detail: "Could not validate credentials"
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              example:
+                detail: "Rate limit exceeded. Max 10 requests per minute."
+
+  /books/{book_id}:
+    get:
+      summary: Get book by ID
+      tags: [Books]
+      parameters:
+        - name: book_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Book found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookResponse'
+              example:
+                id: "123e4567-e89b-12d3-a456-426614174000"
+                title: "Kobzar"
+                author: "Taras Shevchenko"
+                description: "Collection of poetry"
+                status: available
+                year: 1840
+        '404':
+          description: Book not found
+          content:
+            application/json:
+              example:
+                detail: "Book not found"
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              example:
+                detail: "Rate limit exceeded. Max 2 requests per minute."
+
+    delete:
+      summary: Delete book by ID
+      tags: [Books]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: book_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Book deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              example:
+                detail: "Could not validate credentials"
+        '404':
+          description: Book not found
+          content:
+            application/json:
+              example:
+                detail: "Book not found"
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              example:
+                detail: "Rate limit exceeded. Max 10 requests per minute."
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    BookStatus:
+      type: string
+      enum:
+        - available
+        - borrowed
+        - retired
+
+    BookCreate:
+      type: object
+      required: [title, author, description, year]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        author:
+          type: string
+          minLength: 3
+        description:
+          type: string
+          minLength: 5
+        year:
+          type: integer
+          minimum: 0
+
+    BookResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        author:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/BookStatus'
+        year:
+          type: integer
+
+    BooksPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookResponse'
+        next_cursor:
+          type: string
+          format: uuid
+          nullable: true
+
+    UserRegister:
+      type: object
+      required: [email, username, password]
+      properties:
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: "^[a-zA-Z0-9_]+$"
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+
+    UserLogin:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+
+    TokenPair:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          default: bearer
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    AccessTokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          default: bearer
