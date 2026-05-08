@@ -39,6 +39,16 @@ services:
       timeout: 5s
       retries: 5
 
+  locust:
+    image: locustio/locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./locust:/mnt/locust
+    command: -f /mnt/locust/locustfile.py --host=http://app:8000
+    depends_on:
+      - app
+
 volumes:
   postgres_data:
   redis_data:

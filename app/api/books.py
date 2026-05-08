@@ -13,7 +13,6 @@ router = APIRouter(prefix="/books", tags=["Books"])
 @router.get("/", response_model=BooksPage)
 async def get_books(
     service: BookServiceDep,
-    _: RateLimitDep,
     status_filter: Optional[BookStatus] = Query(None),
     author: Optional[str] = Query(None),
     sort_by: Optional[str] = Query(None, pattern="^(title|year)$"),
